@@ -1,0 +1,72 @@
+name: MLOps Pipeline
+
+on:
+  push:
+    branches: [cicd]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  S3_BUCKET: churn-model-kkp
+
+jobs:
+  train-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to commit and push changes back to the repo
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref_name }}       # Check out the active branch directly (avoids detached HEAD)
+        token: ${{ secrets.GITHUB_TOKEN }} # Use built-in workflow token
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
+
+    - name: Set up Python
+      run: uv python install 3.12
+
+    - name: Install dependencies
+      run: uv sync --frozen
+
+    - name: Generate dataset
+      run: uv run python generate_data.py
+
+    - name: Train model
+      run: uv run python train.py
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Push model to S3 directly
+      run: |
+        aws s3 cp models/churn_model.pkl s3://${{ env.S3_BUCKET }}/models/churn_model.pkl
+        echo "Model successfully pushed to s3://${{ env.S3_BUCKET }}/models/churn_model.pkl"
+
+    - name: Update inference.yaml with S3 model path
+      run: |
+        MODEL_URI="s3://${{ env.S3_BUCKET }}/models/churn_model.pkl"
+        sed -i "s|storageUri: .*|storageUri: $MODEL_URI|g" k8s/inference.yaml
+        echo "Updated k8s/inference.yaml with storageUri: $MODEL_URI"
+
+    - name: Commit and push updated inference.yaml
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add k8s/inference.yaml
+        if git diff --staged --quiet; then
+          echo "No changes in k8s/inference.yaml to commit."
+        else
+          git commit -m "ci(k8s): update model storageUri to s3://${{ env.S3_BUCKET }}/models/churn_model.pkl [skip ci]"
+          git pull --rebase origin ${{ github.ref_name }} || true
+          git push origin ${{ github.ref_name }}
+        fi
