@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: realtime-mlops-churn
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/KishorKumarParoi/realtime-mlops.git'
+    targetRevision: cicd
+    path: k8s
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: churn-model
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+  ignoreDifferences:
+    # 1. Preserve active AWS credentials in the cluster
+    - group: ""
+      kind: Secret
+      name: s3-secret
+      jsonPointers:
+        - /data
+        - /stringData
+    # 2. Allow KServe mutating webhook transforms without sync drift
+    - group: serving.kserve.io
+      kind: InferenceService
+      name: churn-predictor
+      jsonPointers:
+        - /spec/predictor/model
+        - /spec/predictor/sklearn
