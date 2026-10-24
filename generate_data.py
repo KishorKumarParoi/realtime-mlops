@@ -24,6 +24,8 @@ churn_prob = (
 )
 data['churn'] = (np.random.random(n_samples) < churn_prob).astype(int)
 
+import os
+os.makedirs('data', exist_ok=True)
 df = pd.DataFrame(data)
 df.to_csv('data/churn_data.csv', index=False)
 print(f"Generated {len(df)} samples")

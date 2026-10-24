@@ -122,8 +122,8 @@ if [ "$DOCKER_AVAILABLE" = true ]; then
     fi
 fi
 
-if [ "$STANDALONE_MODE" = true ] || [ "$DOCKER_AVAILABLE" = false ] || [ "False" = "False" ]; then
-    if [ "$STANDALONE_MODE" = false ] && [ "False" = "True" ]; then
+if [ "$STANDALONE_MODE" = true ] || [ "$DOCKER_AVAILABLE" = false ]; then
+    if [ "$STANDALONE_MODE" = false ]; then
         echo -e "${YELLOW}[!] Docker daemon unavailable. Auto-switching to Standalone Native Python Mode...${NC}"
     fi
     STANDALONE_MODE=true
